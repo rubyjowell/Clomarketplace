@@ -1,11 +1,13 @@
 import { motion } from "motion/react";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router";
-import { Menu, X } from "lucide-react";
+import { Menu, X, LogOut } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 export function Header() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, profile, signOut } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -16,6 +18,12 @@ export function Header() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  const handleSignOut = () => {
+    signOut();
+    navigate("/");
+    setIsMobileMenuOpen(false);
+  };
 
   const isHome = location.pathname === "/";
 
@@ -47,26 +55,47 @@ export function Header() {
             >
               Browse
             </button>
-            <button
-              onClick={() => navigate("/dashboard")}
-              className="font-['Libre_Caslon_Display',sans-serif] text-sm hover:text-gray-600 transition-colors"
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => navigate("/profile")}
-              className="font-['Libre_Caslon_Display',sans-serif] text-sm hover:text-gray-600 transition-colors"
-            >
-              Profile
-            </button>
-            <motion.button
-              onClick={() => navigate("/signin")}
-              className="bg-white text-black font-['Libre_Caslon_Display',sans-serif] text-sm px-6 py-2 rounded-lg border border-black hover:bg-black hover:text-white transition-colors duration-300"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              SIGN IN
-            </motion.button>
+            {user && (
+              <>
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="font-['Libre_Caslon_Display',sans-serif] text-sm hover:text-gray-600 transition-colors"
+                >
+                  Dashboard
+                </button>
+                <button
+                  onClick={() => navigate("/profile")}
+                  className="font-['Libre_Caslon_Display',sans-serif] text-sm hover:text-gray-600 transition-colors"
+                >
+                  Profile
+                </button>
+                <div className="flex items-center gap-2 px-3 py-1 bg-[#e1d0d2] rounded-lg">
+                  <span className="font-['Inter',sans-serif] text-sm font-medium">
+                    {profile?.tagsAvailable ?? 0} tags
+                  </span>
+                </div>
+              </>
+            )}
+            {user ? (
+              <motion.button
+                onClick={handleSignOut}
+                className="bg-white text-black font-['Libre_Caslon_Display',sans-serif] text-sm px-6 py-2 rounded-lg border border-black hover:bg-black hover:text-white transition-colors duration-300 flex items-center gap-2"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <LogOut className="w-4 h-4" />
+                SIGN OUT
+              </motion.button>
+            ) : (
+              <motion.button
+                onClick={() => navigate("/signin")}
+                className="bg-white text-black font-['Libre_Caslon_Display',sans-serif] text-sm px-6 py-2 rounded-lg border border-black hover:bg-black hover:text-white transition-colors duration-300"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                SIGN IN
+              </motion.button>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -100,33 +129,52 @@ export function Header() {
               >
                 Browse
               </button>
-              <button
-                onClick={() => {
-                  navigate("/dashboard");
-                  setIsMobileMenuOpen(false);
-                }}
-                className="block w-full text-left font-['Libre_Caslon_Display',sans-serif] text-sm py-2"
-              >
-                Dashboard
-              </button>
-              <button
-                onClick={() => {
-                  navigate("/profile");
-                  setIsMobileMenuOpen(false);
-                }}
-                className="block w-full text-left font-['Libre_Caslon_Display',sans-serif] text-sm py-2"
-              >
-                Profile
-              </button>
-              <button
-                onClick={() => {
-                  navigate("/signin");
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full bg-black text-white font-['Libre_Caslon_Display',sans-serif] text-sm px-6 py-2 rounded-lg"
-              >
-                SIGN IN
-              </button>
+              {user && (
+                <>
+                  <button
+                    onClick={() => {
+                      navigate("/dashboard");
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="block w-full text-left font-['Libre_Caslon_Display',sans-serif] text-sm py-2"
+                  >
+                    Dashboard
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigate("/profile");
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="block w-full text-left font-['Libre_Caslon_Display',sans-serif] text-sm py-2"
+                  >
+                    Profile
+                  </button>
+                  <div className="py-2">
+                    <span className="font-['Inter',sans-serif] text-sm">
+                      Tags: <strong>{profile?.tagsAvailable ?? 0}</strong>
+                    </span>
+                  </div>
+                </>
+              )}
+              {user ? (
+                <button
+                  onClick={handleSignOut}
+                  className="w-full bg-black text-white font-['Libre_Caslon_Display',sans-serif] text-sm px-6 py-2 rounded-lg flex items-center justify-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  SIGN OUT
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    navigate("/signin");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full bg-black text-white font-['Libre_Caslon_Display',sans-serif] text-sm px-6 py-2 rounded-lg"
+                >
+                  SIGN IN
+                </button>
+              )}
             </div>
           </motion.div>
         )}

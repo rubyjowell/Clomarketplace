@@ -1,79 +1,120 @@
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search, SlidersHorizontal, Heart } from "lucide-react";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
+import { useAuth } from "../context/AuthContext";
+import { projectId, publicAnonKey } from '/utils/supabase/info';
 
-const MOCK_ITEMS = [
-  {
-    id: 1,
-    name: "Silk Evening Gown",
-    brand: "Reformation",
-    size: "S",
-    tags: 2,
-    rentalFee: 45,
-    category: "dress",
-  },
-  {
-    id: 2,
-    name: "Leather Jacket",
-    brand: "AllSaints",
-    size: "M",
-    tags: 3,
-    rentalFee: 60,
-    category: "jacket",
-  },
-  {
-    id: 3,
-    name: "Designer Handbag",
-    brand: "Coach",
-    size: "One Size",
-    tags: 2,
-    rentalFee: 50,
-    category: "bag",
-  },
-  {
-    id: 4,
-    name: "Cocktail Dress",
-    brand: "ASTR The Label",
-    size: "M",
-    tags: 1,
-    rentalFee: 35,
-    category: "dress",
-  },
-  {
-    id: 5,
-    name: "Blazer",
-    brand: "Theory",
-    size: "L",
-    tags: 2,
-    rentalFee: 40,
-    category: "top",
-  },
-  {
-    id: 6,
-    name: "Statement Earrings",
-    brand: "BaubleBar",
-    size: "One Size",
-    tags: 1,
-    rentalFee: 15,
-    category: "accessories",
-  },
-];
+interface MarketplaceItem {
+  id: string;
+  name: string;
+  brand: string;
+  size: string;
+  tags: number;
+  category: string;
+  ownerId: string;
+  ownerName: string;
+  imageUrl?: string;
+  isAvailable: boolean;
+  rentalFee: number;
+}
 
 export default function Marketplace() {
   const navigate = useNavigate();
+  const { user, accessToken } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [items, setItems] = useState<MarketplaceItem[]>([]);
+  const [favourites, setFavourites] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const API_URL = `https://${projectId}.supabase.co/functions/v1/make-server-9f30820f`;
 
   const categories = ["all", "dress", "top", "jacket", "bag", "accessories"];
 
-  const filteredItems = MOCK_ITEMS.filter((item) => {
+  useEffect(() => {
+    fetchItems();
+    if (user) {
+      fetchFavourites();
+    }
+  }, [user]);
+
+  const fetchItems = async () => {
+    try {
+      const response = await fetch(`${API_URL}/items`, {
+        headers: {
+          'Authorization': `Bearer ${publicAnonKey}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setItems(data.items || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch items:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFavourites = async () => {
+    if (!accessToken) return;
+    
+    try {
+      const response = await fetch(`${API_URL}/favourites`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setFavourites(data.favourites || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch favourites:', error);
+    }
+  };
+
+  const toggleFavourite = async (itemId: string) => {
+    if (!user || !accessToken) {
+      navigate('/signin');
+      return;
+    }
+
+    const isFavourited = favourites.includes(itemId);
+
+    try {
+      const response = await fetch(`${API_URL}/favourites/${itemId}`, {
+        method: isFavourited ? 'DELETE' : 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setFavourites(data.favourites);
+      }
+    } catch (error) {
+      console.error('Failed to toggle favourite:', error);
+    }
+  };
+
+  const filteredItems = items.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.brand.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === "all" || item.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    return matchesSearch && matchesCategory && item.isAvailable;
   });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[rgba(230,225,220,0.37)] pt-24 pb-16 flex items-center justify-center">
+        <div className="font-['Inter',sans-serif] text-lg">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[rgba(230,225,220,0.37)] pt-24 pb-16">
@@ -133,17 +174,37 @@ export default function Marketplace() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
-              onClick={() => navigate(`/item/${item.id}`)}
-              className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow cursor-pointer"
+              className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow cursor-pointer relative"
             >
-              <div className="aspect-[3/4] bg-gradient-to-br from-[#e1d0d2] to-[rgba(230,225,220,0.37)] flex items-center justify-center">
+              <div 
+                onClick={() => navigate(`/item/${item.id}`)}
+                className="aspect-[3/4] bg-gradient-to-br from-[#e1d0d2] to-[rgba(230,225,220,0.37)] flex items-center justify-center"
+              >
                 <ImageWithFallback
-                  src={`fashion ${item.category}`}
+                  src={item.imageUrl || `fashion ${item.category}`}
                   alt={item.name}
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div className="p-4">
+              
+              {/* Heart Icon */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFavourite(item.id);
+                }}
+                className="absolute top-4 right-4 bg-white rounded-full p-2 shadow-md hover:scale-110 transition-transform"
+              >
+                <Heart
+                  className={`w-5 h-5 ${
+                    favourites.includes(item.id) 
+                      ? 'fill-red-500 text-red-500' 
+                      : 'text-gray-400'
+                  }`}
+                />
+              </button>
+              
+              <div className="p-4" onClick={() => navigate(`/item/${item.id}`)}>
                 <h3 className="font-['Libre_Caslon_Display',sans-serif] text-xl mb-1">
                   {item.name}
                 </h3>
@@ -151,14 +212,9 @@ export default function Marketplace() {
                   {item.brand} · Size {item.size}
                 </p>
                 <div className="flex justify-between items-center">
-                  <div>
-                    <span className="font-['Inter',sans-serif] text-sm text-gray-500">
-                      {item.tags} tag{item.tags > 1 ? "s" : ""}
-                    </span>
-                  </div>
-                  <div className="font-['Inter',sans-serif] text-lg">
-                    ${item.rentalFee}
-                  </div>
+                  <span className="font-['Inter',sans-serif] text-sm text-gray-500">
+                    {item.tags} tag{item.tags > 1 ? "s" : ""}
+                  </span>
                 </div>
               </div>
             </motion.div>
@@ -167,9 +223,27 @@ export default function Marketplace() {
 
         {filteredItems.length === 0 && (
           <div className="text-center py-16">
-            <p className="font-['Inter',sans-serif] text-gray-500 text-lg">
+            <p className="font-['Inter',sans-serif] text-gray-500 text-lg mb-4">
               No items found. Try a different search or category.
             </p>
+            {items.length === 0 && user && (
+              <button
+                onClick={async () => {
+                  try {
+                    await fetch(`${API_URL}/seed`, {
+                      method: 'POST',
+                      headers: { 'Authorization': `Bearer ${publicAnonKey}` }
+                    });
+                    fetchItems();
+                  } catch (error) {
+                    console.error('Failed to seed data:', error);
+                  }
+                }}
+                className="bg-black text-white px-6 py-2 rounded-lg font-['Inter',sans-serif] hover:bg-gray-800"
+              >
+                Load Sample Items
+              </button>
+            )}
           </div>
         )}
       </div>

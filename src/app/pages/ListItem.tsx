@@ -2,20 +2,81 @@ import { motion } from "motion/react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Upload, ArrowLeft } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { projectId, publicAnonKey } from '/utils/supabase/info';
 
 export default function ListItem() {
   const navigate = useNavigate();
+  const { user, profile, accessToken } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
     brand: "",
     size: "",
     category: "dress",
-    retailValue: "",
     tags: "1",
-    rentalFee: "",
-    deposit: "",
     description: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const API_URL = `https://${projectId}.supabase.co/functions/v1/make-server-9f30820f`;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!user || !accessToken) {
+      navigate('/signin');
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const response = await fetch(`${API_URL}/items`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          ...formData,
+          tags: parseInt(formData.tags),
+          ownerName: profile?.fullName || user.email,
+          imageUrl: "",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to list item');
+      }
+
+      alert('Item listed successfully!');
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[rgba(230,225,220,0.37)] pt-24 pb-16 flex items-center justify-center">
+        <div className="text-center">
+          <p className="font-['Inter',sans-serif] text-lg mb-4">Please sign in to list items</p>
+          <button
+            onClick={() => navigate('/signin')}
+            className="bg-black text-white px-6 py-2 rounded-lg font-['Inter',sans-serif]"
+          >
+            Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[rgba(230,225,220,0.37)] pt-24 pb-16">
@@ -38,7 +99,13 @@ export default function ListItem() {
             List Your Item
           </h1>
 
-          <form className="space-y-6">
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-600 font-['Inter',sans-serif] text-sm">{error}</p>
+            </div>
+          )}
+
+          <form className="space-y-6" onSubmit={handleSubmit}>
             {/* Photos */}
             <div className="bg-white rounded-lg p-6">
               <label className="block font-['Libre_Caslon_Display',sans-serif] text-xl mb-4">
@@ -141,18 +208,6 @@ export default function ListItem() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block font-['Inter',sans-serif] text-sm mb-2">
-                    Retail Value
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.retailValue}
-                    onChange={(e) => setFormData({ ...formData, retailValue: e.target.value })}
-                    placeholder="$0"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e1d0d2]"
-                  />
-                </div>
-                <div>
-                  <label className="block font-['Inter',sans-serif] text-sm mb-2">
                     Tags Required
                   </label>
                   <select
@@ -167,44 +222,16 @@ export default function ListItem() {
                   </select>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-['Inter',sans-serif] text-sm mb-2">
-                    Rental Fee
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.rentalFee}
-                    onChange={(e) => setFormData({ ...formData, rentalFee: e.target.value })}
-                    placeholder="$0"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e1d0d2]"
-                  />
-                </div>
-                <div>
-                  <label className="block font-['Inter',sans-serif] text-sm mb-2">
-                    Security Deposit
-                  </label>
-                  <input
-                    type="number"
-                    value={formData.deposit}
-                    onChange={(e) => setFormData({ ...formData, deposit: e.target.value })}
-                    placeholder="$0"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e1d0d2]"
-                  />
-                </div>
-              </div>
             </div>
 
             {/* Submit */}
             <motion.button
-              type="button"
-              onClick={() => navigate("/dashboard")}
+              type="submit"
               className="w-full bg-black text-white font-['Libre_Caslon_Display',sans-serif] py-4 rounded-lg text-xl"
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
             >
-              List Item
+              {loading ? 'Listing...' : 'List Item'}
             </motion.button>
           </form>
         </motion.div>

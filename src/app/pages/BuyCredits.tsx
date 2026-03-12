@@ -2,11 +2,18 @@ import { motion } from "motion/react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Check } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { projectId, publicAnonKey } from '/utils/supabase/info';
 
 export default function BuyCredits() {
   const navigate = useNavigate();
+  const { profile, accessToken, refreshProfile, user } = useAuth();
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
-  const currentTags = 4;
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState("");
+  const currentTags = profile?.tagsAvailable || 0;
+
+  const API_URL = `https://${projectId}.supabase.co/functions/v1/make-server-9f30820f`;
 
   const tagPackages = [
     {
@@ -29,6 +36,69 @@ export default function BuyCredits() {
       description: "Maximum flexibility",
     },
   ];
+
+  const handlePurchase = async () => {
+    if (!selectedPackage || !user || !accessToken) {
+      if (!user) {
+        navigate('/signin');
+      }
+      return;
+    }
+
+    setProcessing(true);
+    setError("");
+
+    const pkg = tagPackages.find(p => p.id === selectedPackage);
+    if (!pkg) return;
+
+    try {
+      // In a real app, you'd integrate with Stripe here
+      // For now, we'll directly add tags (simulating successful payment)
+      const response = await fetch(`${API_URL}/tags/purchase`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          quantity: pkg.tags,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Purchase failed');
+      }
+
+      // Refresh profile to show new tag count
+      await refreshProfile();
+
+      // Show success and redirect
+      alert(`Success! ${pkg.tags} tags added to your account.`);
+      navigate('/profile');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[rgba(230,225,220,0.37)] pt-24 pb-16 flex items-center justify-center">
+        <div className="text-center">
+          <p className="font-['Inter',sans-serif] text-lg mb-4">Please sign in to purchase tags</p>
+          <button
+            onClick={() => navigate('/signin')}
+            className="bg-black text-white px-6 py-2 rounded-lg font-['Inter',sans-serif]"
+          >
+            Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[rgba(230,225,220,0.37)] pt-24 pb-16">
@@ -160,8 +230,8 @@ export default function BuyCredits() {
 
         {/* Purchase Button */}
         <motion.button
-          onClick={() => navigate("/profile")}
-          disabled={!selectedPackage}
+          onClick={handlePurchase}
+          disabled={!selectedPackage || processing}
           className="w-full bg-black text-white font-['Libre_Caslon_Display',sans-serif] py-4 rounded-lg text-xl disabled:opacity-50 disabled:cursor-not-allowed"
           whileHover={selectedPackage ? { scale: 1.02 } : {}}
           whileTap={selectedPackage ? { scale: 0.98 } : {}}
@@ -169,8 +239,14 @@ export default function BuyCredits() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.6 }}
         >
-          {selectedPackage ? "Purchase Tags" : "Select a Package"}
+          {processing ? "Processing..." : selectedPackage ? "Purchase Tags" : "Select a Package"}
         </motion.button>
+
+        {error && (
+          <p className="font-['Inter',sans-serif] text-xs text-red-500 text-center mt-4">
+            {error}
+          </p>
+        )}
 
         <p className="font-['Inter',sans-serif] text-xs text-gray-500 text-center mt-4">
           Payment will be processed securely through Stripe. Tags will be added immediately.

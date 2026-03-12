@@ -7,7 +7,7 @@ import imgFavouritesForAReason from "figma:asset/aef6044e3493721f52b80dd09964cd1
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 
 function HeroSection() {
-  const ref = useRef(null);
+  const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ["start start", "end start"],
