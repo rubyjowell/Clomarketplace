@@ -39,7 +39,7 @@ export default function UserProfile() {
     },
     {
       id: 4,
-      image: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmYXNoaW9uJTIwc3RyZWV0JTIwc3R5bGV8ZW58MXx8fHwxNzMzMjk0ODY1fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      image: "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxmYXNoaW9uJTIwc3RyZWV0JTIwc3R5bGU8ZW58MXx8fHwxNzMzMjk0ODY1fDA&ixlib=rb-4.1.0&q=80&w=1080",
       itemName: "Oversized Blazer",
     },
   ];
@@ -68,29 +68,8 @@ export default function UserProfile() {
     },
   ];
 
-  const reviews = [
-    {
-      id: 1,
-      reviewer: "Sarah M.",
-      rating: 5,
-      comment: "Amazing experience! The dress was in perfect condition and Emma was so communicative.",
-      date: "March 10, 2026",
-    },
-    {
-      id: 2,
-      reviewer: "Jessica L.",
-      rating: 5,
-      comment: "Great items and super easy rental process. Highly recommend!",
-      date: "March 5, 2026",
-    },
-    {
-      id: 3,
-      reviewer: "Taylor K.",
-      rating: 4,
-      comment: "Beautiful pieces, well maintained. Would rent again!",
-      date: "February 28, 2026",
-    },
-  ];
+  // Reviews will be empty for now - can be added later
+  const reviews: any[] = [];
 
   return (
     <div className="min-h-screen bg-[rgba(230,225,220,0.37)] pt-24 pb-16">

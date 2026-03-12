@@ -1,41 +1,24 @@
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Check } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { projectId, publicAnonKey } from '/utils/supabase/info';
 
+const API_URL = `https://${projectId}.supabase.co/functions/v1/make-server-9f30820f`;
+
+const tagPackages = [
+  { id: 1, tags: 2, price: 15, popular: false },
+  { id: 2, tags: 5, price: 35, popular: true },
+  { id: 3, tags: 10, price: 65, popular: false },
+];
+
 export default function BuyCredits() {
   const navigate = useNavigate();
-  const { profile, accessToken, refreshProfile, user } = useAuth();
-  const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
+  const { user, profile, accessToken, refreshProfile } = useAuth();
+  const [selectedPackage, setSelectedPackage] = useState<number | null>(2);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
-  const currentTags = profile?.tagsAvailable || 0;
-
-  const API_URL = `https://${projectId}.supabase.co/functions/v1/make-server-9f30820f`;
-
-  const tagPackages = [
-    {
-      id: "basic",
-      tags: 2,
-      price: 15,
-      description: "Perfect for one extra rental",
-    },
-    {
-      id: "standard",
-      tags: 5,
-      price: 35,
-      description: "Best value for regular renters",
-      popular: true,
-    },
-    {
-      id: "premium",
-      tags: 10,
-      price: 65,
-      description: "Maximum flexibility",
-    },
-  ];
 
   const handlePurchase = async () => {
     if (!selectedPackage || !user || !accessToken) {
@@ -52,205 +35,192 @@ export default function BuyCredits() {
     if (!pkg) return;
 
     try {
-      // In a real app, you'd integrate with Stripe here
-      // For now, we'll directly add tags (simulating successful payment)
-      const response = await fetch(`${API_URL}/tags/purchase`, {
+      // Create Stripe checkout session
+      const response = await fetch(`${API_URL}/stripe/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
+          packageId: pkg.id,
           quantity: pkg.tags,
+          price: pkg.price,
+          returnUrl: window.location.origin + '/buy-credits',
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Purchase failed');
+        throw new Error(data.error || 'Failed to create checkout session');
       }
 
-      // Refresh profile to show new tag count
-      await refreshProfile();
-
-      // Show success and redirect
-      alert(`Success! ${pkg.tags} tags added to your account.`);
-      navigate('/profile');
+      // Redirect to Stripe Checkout
+      window.location.href = data.url;
     } catch (err: any) {
       setError(err.message);
-    } finally {
       setProcessing(false);
     }
   };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-[rgba(230,225,220,0.37)] pt-24 pb-16 flex items-center justify-center">
-        <div className="text-center">
-          <p className="font-['Inter',sans-serif] text-lg mb-4">Please sign in to purchase tags</p>
-          <button
-            onClick={() => navigate('/signin')}
-            className="bg-black text-white px-6 py-2 rounded-lg font-['Inter',sans-serif]"
-          >
-            Sign In
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Check if returning from successful payment
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    const success = urlParams.get('success');
+
+    if (success === 'true' && sessionId && accessToken) {
+      // Verify payment and add tags
+      fetch(`${API_URL}/stripe/verify-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ sessionId }),
+      })
+        .then(res => res.json())
+        .then(async (data) => {
+          if (data.success) {
+            await refreshProfile();
+            alert(`Success! ${data.quantity} tags added to your account.`);
+            // Clean up URL
+            window.history.replaceState({}, '', '/buy-credits');
+          }
+        })
+        .catch(err => {
+          console.error('Payment verification error:', err);
+          alert('Payment successful but verification failed. Please contact support.');
+        });
+    } else if (urlParams.get('canceled') === 'true') {
+      setError('Payment was canceled. Please try again.');
+      window.history.replaceState({}, '', '/buy-credits');
+    }
+  }, [accessToken, refreshProfile]);
 
   return (
     <div className="min-h-screen bg-[rgba(230,225,220,0.37)] pt-24 pb-16">
-      <div className="container mx-auto px-6 md:px-12 lg:px-16 max-w-[800px]">
-        <motion.button
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 mb-6 font-['Inter',sans-serif] text-gray-600 hover:text-black"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back
-        </motion.button>
-
-        <motion.h1
-          className="font-['Libre_Caslon_Display',sans-serif] text-4xl mb-4"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          Buy Tags
-        </motion.h1>
-
-        <motion.p
-          className="font-['Inter',sans-serif] text-gray-600 mb-8"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          Add tags to rent more items this month. Tags expire at the end of the billing cycle.
-        </motion.p>
-
-        {/* Current Tags */}
+      <div className="container mx-auto px-6 max-w-[1000px]">
         <motion.div
-          className="bg-white rounded-lg p-6 mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ duration: 0.5 }}
         >
-          <div className="flex justify-between items-center">
-            <h2 className="font-['Libre_Caslon_Display',sans-serif] text-2xl">
-              Current Tags
-            </h2>
-            <span className="font-['Inter',sans-serif] text-3xl text-green-600">
-              {currentTags}
-            </span>
-          </div>
-        </motion.div>
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 text-gray-600 hover:text-black mb-8 font-['Inter',sans-serif]"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back
+          </button>
 
-        {/* Tag Packages */}
-        <div className="space-y-4 mb-8">
-          {tagPackages.map((pkg, index) => (
-            <motion.div
-              key={pkg.id}
-              className={`bg-white rounded-lg p-6 cursor-pointer transition-all ${
-                selectedPackage === pkg.id
-                  ? "ring-2 ring-black"
-                  : "hover:shadow-lg"
-              } ${pkg.popular ? "relative" : ""}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 + index * 0.1 }}
-              onClick={() => setSelectedPackage(pkg.id)}
-              whileHover={{ scale: 1.02 }}
-            >
-              {pkg.popular && (
-                <div className="absolute -top-3 right-6 bg-black text-white px-4 py-1 rounded-full text-xs font-['Inter',sans-serif]">
-                  Most Popular
-                </div>
-              )}
-              <div className="flex justify-between items-center">
-                <div className="flex-1">
-                  <div className="flex items-center gap-4 mb-2">
-                    <h3 className="font-['Libre_Caslon_Display',sans-serif] text-2xl">
-                      {pkg.tags} Tags
-                    </h3>
-                    <span className="font-['Inter',sans-serif] text-xl">
-                      ${pkg.price}
-                    </span>
-                  </div>
-                  <p className="font-['Inter',sans-serif] text-sm text-gray-600">
-                    {pkg.description}
-                  </p>
-                </div>
-                {selectedPackage === pkg.id && (
-                  <div className="ml-4 bg-black rounded-full p-1">
-                    <Check className="w-5 h-5 text-white" />
+          <h1 className="font-['Libre_Caslon_Display',sans-serif] text-4xl md:text-5xl mb-4">
+            Purchase Tags
+          </h1>
+          <p className="font-['Inter',sans-serif] text-gray-600 mb-8">
+            You currently have{" "}
+            <span className="font-semibold text-black">
+              {profile?.tagsAvailable || 0} tags
+            </span>{" "}
+            available
+          </p>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+              {error}
+            </div>
+          )}
+
+          <div className="grid md:grid-cols-3 gap-6 mb-8">
+            {tagPackages.map((pkg) => (
+              <motion.div
+                key={pkg.id}
+                whileHover={{ scale: 1.02 }}
+                onClick={() => setSelectedPackage(pkg.id)}
+                className={`relative bg-white rounded-lg p-6 cursor-pointer transition-all ${
+                  selectedPackage === pkg.id
+                    ? "ring-2 ring-black shadow-lg"
+                    : "hover:shadow-md"
+                }`}
+              >
+                {pkg.popular && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-black text-white px-3 py-1 rounded-full text-xs font-['Inter',sans-serif]">
+                    Popular
                   </div>
                 )}
-              </div>
-            </motion.div>
-          ))}
-        </div>
 
-        {/* Purchase Summary */}
-        {selectedPackage && (
-          <motion.div
-            className="bg-white rounded-lg p-6 mb-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
+                {selectedPackage === pkg.id && (
+                  <div className="absolute top-4 right-4 bg-black text-white rounded-full p-1">
+                    <Check className="w-4 h-4" />
+                  </div>
+                )}
+
+                <div className="text-center">
+                  <div className="font-['Libre_Caslon_Display',sans-serif] text-5xl mb-2">
+                    {pkg.tags}
+                  </div>
+                  <div className="font-['Inter',sans-serif] text-gray-600 mb-4">
+                    {pkg.tags === 1 ? "Tag" : "Tags"}
+                  </div>
+                  <div className="font-['Inter',sans-serif] text-3xl font-semibold">
+                    ${pkg.price}
+                  </div>
+                  <div className="font-['Inter',sans-serif] text-sm text-gray-500 mt-2">
+                    ${(pkg.price / pkg.tags).toFixed(2)} per tag
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-lg p-6 mb-8">
             <h3 className="font-['Libre_Caslon_Display',sans-serif] text-xl mb-4">
-              Purchase Summary
+              Payment Details
             </h3>
-            <div className="space-y-2 mb-4">
-              <div className="flex justify-between font-['Inter',sans-serif]">
-                <span className="text-gray-600">Tags to Add</span>
-                <span>
-                  {tagPackages.find((p) => p.id === selectedPackage)?.tags}
-                </span>
+            {selectedPackage ? (
+              <div className="font-['Inter',sans-serif] space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Package:</span>
+                  <span className="font-semibold">
+                    {tagPackages.find((p) => p.id === selectedPackage)?.tags}{" "}
+                    Tags
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Total:</span>
+                  <span className="font-semibold text-xl">
+                    ${tagPackages.find((p) => p.id === selectedPackage)?.price}
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between font-['Inter',sans-serif]">
-                <span className="text-gray-600">Price</span>
-                <span>
-                  ${tagPackages.find((p) => p.id === selectedPackage)?.price}
-                </span>
-              </div>
-              <div className="border-t pt-2 flex justify-between font-['Inter',sans-serif] text-lg">
-                <span>New Balance</span>
-                <span className="text-green-600">
-                  {currentTags +
-                    (tagPackages.find((p) => p.id === selectedPackage)
-                      ?.tags || 0)}{" "}
-                  tags
-                </span>
-              </div>
-            </div>
-          </motion.div>
-        )}
+            ) : (
+              <p className="font-['Inter',sans-serif] text-gray-500">
+                Select a package to continue
+              </p>
+            )}
+          </div>
 
-        {/* Purchase Button */}
-        <motion.button
-          onClick={handlePurchase}
-          disabled={!selectedPackage || processing}
-          className="w-full bg-black text-white font-['Libre_Caslon_Display',sans-serif] py-4 rounded-lg text-xl disabled:opacity-50 disabled:cursor-not-allowed"
-          whileHover={selectedPackage ? { scale: 1.02 } : {}}
-          whileTap={selectedPackage ? { scale: 0.98 } : {}}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-        >
-          {processing ? "Processing..." : selectedPackage ? "Purchase Tags" : "Select a Package"}
-        </motion.button>
+          <button
+            onClick={handlePurchase}
+            disabled={!selectedPackage || processing}
+            className="w-full bg-black text-white py-4 rounded-lg font-['Inter',sans-serif] text-lg hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            {processing ? "Processing..." : "Continue to Payment"}
+          </button>
 
-        {error && (
-          <p className="font-['Inter',sans-serif] text-xs text-red-500 text-center mt-4">
-            {error}
-          </p>
-        )}
-
-        <p className="font-['Inter',sans-serif] text-xs text-gray-500 text-center mt-4">
-          Payment will be processed securely through Stripe. Tags will be added immediately.
-        </p>
+          <div className="mt-8 bg-gray-100 rounded-lg p-6">
+            <h3 className="font-['Libre_Caslon_Display',sans-serif] text-xl mb-3">
+              How it works
+            </h3>
+            <ol className="list-decimal list-inside space-y-2 font-['Inter',sans-serif] text-gray-700">
+              <li>Select a tag package above</li>
+              <li>Complete secure payment via Stripe</li>
+              <li>Tags are added to your account instantly</li>
+              <li>Use tags to rent items from the marketplace</li>
+            </ol>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

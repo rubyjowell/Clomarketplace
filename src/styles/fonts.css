@@ -1,23 +1,6 @@
+/* Google Fonts - Optimized for Vercel */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Libre+Bodoni:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
-
-@font-face {
-  font-family: 'Libre Caslon Display';
-  font-style: normal;
-  font-weight: 400;
-  src: url('https://fonts.gstatic.com/s/librecaslondisplay/v13/TuGOUUFxWphYQ6YI6q9Xp61FQzxDRKmzr2lR.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Meie Script';
-  font-style: normal;
-  font-weight: 400;
-  src: url('https://fonts.gstatic.com/s/meiescript/v19/_LOImzDK7erRjhunIspaMjxn.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'League Gothic';
-  font-style: normal;
-  font-weight: 400;
-  src: url('https://fonts.gstatic.com/s/leaguegothic/v11/qFdR35CBi4tvBz81xy7WG7ep-BQAY7Krj7feObpH.woff2') format('woff2');
-}
+@import url('https://fonts.googleapis.com/css2?family=Libre+Caslon+Display&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Meie+Script&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=League+Gothic&display=swap');

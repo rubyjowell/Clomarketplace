@@ -12,6 +12,7 @@ import Profile from "./pages/Profile";
 import BuyCredits from "./pages/BuyCredits";
 import Favourites from "./pages/Favourites";
 import UserProfile from "./pages/UserProfile";
+import TestBackend from "./pages/TestBackend";
 
 function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -29,6 +30,14 @@ export const router = createBrowserRouter([
     element: (
       <Layout>
         <Landing />
+      </Layout>
+    ),
+  },
+  {
+    path: "/test-backend",
+    element: (
+      <Layout>
+        <TestBackend />
       </Layout>
     ),
   },

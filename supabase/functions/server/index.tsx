@@ -1,10 +1,20 @@
 import { Hono } from "npm:hono";
 import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import * as kv from "./kv_store.tsx";
+import Stripe from "npm:stripe@17.4.0";
 
 const app = new Hono();
+
+// Initialize Stripe
+const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+  apiVersion: '2024-11-20.acacia',
+});
+
+// Middleware
+app.use("*", cors());
+app.use("*", logger(console.log));
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -12,122 +22,24 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
 );
 
-// Enable logger
-app.use('*', logger(console.log));
-
-// Enable CORS for all routes and methods
-app.use(
-  "/*",
-  cors({
-    origin: "*",
-    allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    exposeHeaders: ["Content-Length"],
-    maxAge: 600,
-  }),
-);
-
 // Health check endpoint
 app.get("/make-server-9f30820f/health", (c) => {
   return c.json({ status: "ok" });
 });
 
-// Seed initial data (for demo purposes)
-app.post("/make-server-9f30820f/seed", async (c) => {
+// Clear all data (DEVELOPMENT ONLY - Remove in production)
+app.delete("/make-server-9f30820f/dev/clear-all-items", async (c) => {
   try {
-    const sampleItems = [
-      {
-        id: "item-1",
-        name: "Silk Evening Gown",
-        brand: "Reformation",
-        size: "S",
-        tags: 2,
-        category: "dress",
-        ownerId: "demo-user",
-        ownerName: "Sarah Mitchell",
-        isAvailable: true,
-        imageUrl: "",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "item-2",
-        name: "Leather Jacket",
-        brand: "AllSaints",
-        size: "M",
-        tags: 3,
-        category: "jacket",
-        ownerId: "demo-user",
-        ownerName: "Sarah Mitchell",
-        isAvailable: true,
-        imageUrl: "",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "item-3",
-        name: "Designer Handbag",
-        brand: "Coach",
-        size: "One Size",
-        tags: 2,
-        category: "bag",
-        ownerId: "demo-user",
-        ownerName: "Emma Chen",
-        isAvailable: true,
-        imageUrl: "",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "item-4",
-        name: "Cocktail Dress",
-        brand: "ASTR The Label",
-        size: "M",
-        tags: 1,
-        category: "dress",
-        ownerId: "demo-user",
-        ownerName: "Emma Chen",
-        isAvailable: true,
-        imageUrl: "",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "item-5",
-        name: "Blazer",
-        brand: "Theory",
-        size: "L",
-        tags: 2,
-        category: "top",
-        ownerId: "demo-user",
-        ownerName: "Alex Johnson",
-        isAvailable: true,
-        imageUrl: "",
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: "item-6",
-        name: "Statement Earrings",
-        brand: "BaubleBar",
-        size: "One Size",
-        tags: 1,
-        category: "accessories",
-        ownerId: "demo-user",
-        ownerName: "Alex Johnson",
-        isAvailable: true,
-        imageUrl: "",
-        createdAt: new Date().toISOString(),
-      },
-    ];
-
-    // Save each item to the database
-    for (const item of sampleItems) {
-      await kv.set(`item:${item.id}`, item);
+    // Get all items and delete them
+    const items = await kv.getByPrefix('item:');
+    for (const item of items) {
+      await kv.del(`item:${item.id}`);
     }
-
-    return c.json({ 
-      success: true, 
-      message: `Seeded ${sampleItems.length} items` 
-    });
+    
+    return c.json({ success: true, message: `Deleted ${items.length} items` });
   } catch (error) {
-    console.error('Seed error:', error);
-    return c.json({ error: 'Failed to seed data' }, 500);
+    console.error('Clear items error:', error);
+    return c.json({ error: 'Failed to clear items' }, 500);
   }
 });
 
@@ -430,7 +342,124 @@ app.delete("/make-server-9f30820f/favourites/:itemId", async (c) => {
 
 // ============= TAGS/CREDITS ENDPOINTS =============
 
-// Purchase additional tags
+// Create Stripe checkout session for tag purchase
+app.post("/make-server-9f30820f/stripe/create-checkout-session", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    
+    if (!accessToken) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+    
+    if (error || !user) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const { packageId, quantity, price, returnUrl } = await c.req.json();
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${quantity} Tags`,
+              description: `Purchase ${quantity} rental tags for CLO Marketplace`,
+            },
+            unit_amount: price * 100, // Stripe uses cents
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: `${returnUrl}?session_id={CHECKOUT_SESSION_ID}&success=true`,
+      cancel_url: `${returnUrl}?canceled=true`,
+      metadata: {
+        userId: user.id,
+        packageId,
+        quantity: quantity.toString(),
+      },
+    });
+
+    return c.json({ 
+      success: true,
+      sessionId: session.id,
+      url: session.url
+    });
+
+  } catch (error) {
+    console.error('Stripe checkout error:', error);
+    return c.json({ error: 'Failed to create checkout session' }, 500);
+  }
+});
+
+// Verify payment and add tags
+app.post("/make-server-9f30820f/stripe/verify-payment", async (c) => {
+  try {
+    const accessToken = c.req.header('Authorization')?.split(' ')[1];
+    
+    if (!accessToken) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+    
+    if (error || !user) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const { sessionId } = await c.req.json();
+
+    // Retrieve the checkout session from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    if (session.payment_status !== 'paid') {
+      return c.json({ error: 'Payment not completed' }, 400);
+    }
+
+    if (session.metadata?.userId !== user.id) {
+      return c.json({ error: 'Invalid session' }, 400);
+    }
+
+    const quantity = parseInt(session.metadata?.quantity || '0');
+    
+    // Add tags to user's account
+    const profile = await kv.get(`user:${user.id}`);
+    if (!profile) {
+      return c.json({ error: 'Profile not found' }, 404);
+    }
+
+    profile.tagsAvailable = (profile.tagsAvailable || 0) + quantity;
+    await kv.set(`user:${user.id}`, profile);
+
+    // Save payment record
+    const paymentId = `payment-${Date.now()}`;
+    await kv.set(paymentId, {
+      id: paymentId,
+      userId: user.id,
+      sessionId,
+      quantity,
+      amount: session.amount_total / 100,
+      createdAt: new Date().toISOString()
+    });
+
+    return c.json({ 
+      success: true,
+      tagsAvailable: profile.tagsAvailable,
+      quantity
+    });
+
+  } catch (error) {
+    console.error('Payment verification error:', error);
+    return c.json({ error: 'Failed to verify payment' }, 500);
+  }
+});
+
+// Purchase additional tags (direct - for testing, use Stripe in production)
 app.post("/make-server-9f30820f/tags/purchase", async (c) => {
   try {
     const accessToken = c.req.header('Authorization')?.split(' ')[1];

@@ -224,24 +224,16 @@ export default function Marketplace() {
         {filteredItems.length === 0 && (
           <div className="text-center py-16">
             <p className="font-['Inter',sans-serif] text-gray-500 text-lg mb-4">
-              No items found. Try a different search or category.
+              {items.length === 0 
+                ? "No items available yet. Be the first to list an item!" 
+                : "No items found. Try a different search or category."}
             </p>
             {items.length === 0 && user && (
               <button
-                onClick={async () => {
-                  try {
-                    await fetch(`${API_URL}/seed`, {
-                      method: 'POST',
-                      headers: { 'Authorization': `Bearer ${publicAnonKey}` }
-                    });
-                    fetchItems();
-                  } catch (error) {
-                    console.error('Failed to seed data:', error);
-                  }
-                }}
-                className="bg-black text-white px-6 py-2 rounded-lg font-['Inter',sans-serif] hover:bg-gray-800"
+                onClick={() => navigate('/list-item')}
+                className="bg-black text-white px-6 py-3 rounded-lg font-['Inter',sans-serif] hover:bg-gray-800"
               >
-                Load Sample Items
+                List Your First Item
               </button>
             )}
           </div>
